@@ -24,9 +24,11 @@ jobs:
           sed -i 's#<application#<uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.VIBRATE"/>\n    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>\n    <application#' $M
       - name: Fullscreen immersive + cutout
         run: |
-          cp native/MainActivity.java android/app/src/main/java/com/atmosphere/music/MainActivity.java
+          cp native/MainActivity.java native/MusicScannerPlugin.java android/app/src/main/java/com/atmosphere/music/
           S=android/app/src/main/res/values/styles.xml
           sed -i 's#</style>#    <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>\n    </style>#' $S
+      - name: App icon
+        run: cp -r native/res/* android/app/src/main/res/
       - run: npx cap sync android
       - run: cd android && chmod +x gradlew && ./gradlew assembleDebug
       - run: cp android/app/build/outputs/apk/debug/app-debug.apk Atmosphere.apk

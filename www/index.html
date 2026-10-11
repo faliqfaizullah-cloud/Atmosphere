@@ -5,7 +5,7 @@
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
 html,body{margin:0;width:100vw;height:100vh;padding:0;overscroll-behavior:none;height:100%;overflow:hidden;background:#1b1a19;font-family:-apple-system,"SF Pro Display",Inter,system-ui,sans-serif;color:#fff}
-:root{--s:min(36vh,300px);--glass:rgba(60,58,57,.55);--stroke:rgba(255,255,255,.14)}
+:root{--s:min(30vh,280px);--glass:rgba(60,58,57,.55);--stroke:rgba(255,255,255,.14)}
 #room{position:fixed;inset:0;background:radial-gradient(120% 90% at 50% 30%,#6b625b 0%,#3b3633 45%,#1c1a19 100%)}
 #cam{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .8s}
 #cam.on{opacity:1}
@@ -53,6 +53,11 @@ svg{width:1.2em;height:1.2em;fill:currentColor;flex:none}
 #rot{position:fixed;inset:0;background:#111;z-index:99;display:none;align-items:center;justify-content:center;text-align:center;font-size:18px;padding:30px}
 @media (orientation:portrait){#rot{display:flex}}
 #drop{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.5);font-size:22px}
+#world{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2.6vh;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);transform:none!important;transition:none!important}
+#tabs,#stage,#label,#bar,#dots{position:relative!important;left:auto!important;top:auto!important;right:auto!important;transform:none!important;margin:0!important;flex:none}
+#stage{width:100%;height:var(--s)}#bar{width:min(92%,700px)}#dots{width:min(46%,320px)}
+#empty{position:absolute!important;inset:0;transform:none!important;height:auto!important;pointer-events:none;padding-top:8vh}
+#empty .big{pointer-events:auto}
 </style></head>
 <body>
 <div id="room"></div><video id="cam" playsinline muted autoplay></video><div id="bgart"></div><div id="shade"></div>
@@ -71,7 +76,7 @@ svg{width:1.2em;height:1.2em;fill:currentColor;flex:none}
  <div class="panel glass" id="pl"><h4>Lyrics</h4><div id="lt" style="font-size:14px;line-height:1.6;color:#d8d4d0"></div></div>
  <div class="panel glass" id="pv"><h4>Volume</h4><input id="vr" type="range" min="0" max="1" step=".01" value=".8" style="width:100%"></div>
  <div class="panel glass" id="pm"><h4>Options</h4>
-  <div class="row" id="m1">＋ Import songs</div><div class="row" id="m2">▤ Import folder</div><div class="row" id="m3">◎ Toggle AR passthrough</div><div class="row" id="m4">⤢ Fullscreen</div><div class="row" id="m5">✕ Clear library</div></div>
+  <div class="row" id="m6">⟳ Rescan device music</div><div class="row" id="m1">＋ Import songs</div><div class="row" id="m2">▤ Import folder</div><div class="row" id="m3">◎ Toggle AR passthrough</div><div class="row" id="m4">⤢ Fullscreen</div><div class="row" id="m5">✕ Clear library</div></div>
 </div>
 <div id="drop">Drop songs to import</div>
 <div id="rot">Rotate your device to landscape<br>Atmosphere is best experienced sideways.</div>
@@ -115,10 +120,13 @@ async function readTags(f){const r={};try{
 }catch(e){}return r}
 const isAudio=f=>f.type.startsWith('audio/')||/\.(mp3|m4a|aac|flac|wav|ogg|oga|opus|wma|weba)$/i.test(f.name);
 async function importFiles(fs){fs=[...fs].filter(isAudio);if(!fs.length){buzz([30,40,30]);return}
- for(const f of fs){const t=await readTags(f),n=f.name.replace(/\.[^.]+$/,'');const title=t.title||n;all.push({id:++uid,title,artist:t.artist||'Unknown Artist',album:t.album||'Single',cover:t.cover||art(title),url:URL.createObjectURL(f)})}
- buzz([12,40,12,40,24]);build();if(!playing)$('npt').textContent=`${all.length} songs imported`}
+ for(const f of fs){const key=f.name+'|'+f.size;if(all.some(t=>t.key==key))continue;const t=await readTags(f),n=f.name.replace(/\.[^.]+$/,''),title=t.title||n;
+  const id='i'+Date.now().toString(36)+(++uid);const tr={id,key,title,artist:t.artist||'Unknown Artist',album:t.album||'Single',cover:t.cover||art(title),url:URL.createObjectURL(f)};all.push(tr);
+  let cb=null;try{if(t.cover)cb=await(await fetch(t.cover)).blob()}catch(e){}
+  dbDo('readwrite',x=>x.put({id,key,title:tr.title,artist:tr.artist,album:tr.album,blob:f,coverBlob:cb}))}
+ buzz([12,40,12,40,24]);build();if(!playing)$('npt').textContent=`${all.length} songs`}
 ['f1','f2'].forEach(i=>$(i).onchange=e=>{importFiles(e.target.files);e.target.value=''});
-$('imp').onclick=()=>{buzz(20);$('f1').click()};
+$('imp').onclick=()=>{buzz(20);MS?scanDevice():$('f1').click()};
 addEventListener('dragover',e=>{e.preventDefault();$('drop').style.display='flex'});addEventListener('dragleave',e=>{if(!e.relatedTarget)$('drop').style.display='none'});
 addEventListener('drop',e=>{e.preventDefault();$('drop').style.display='none';importFiles(e.dataTransfer.files)});
 
@@ -144,8 +152,29 @@ st.addEventListener('click',e=>{if(moved>12)return;const c=e.target.closest('.ca
 st.addEventListener('wheel',e=>{e.preventDefault();go(cur+Math.sign(e.deltaX||e.deltaY))},{passive:false});
 addEventListener('keydown',e=>{if(e.key=='ArrowRight')go(cur+1);if(e.key=='ArrowLeft')go(cur-1);if(e.key==' '){e.preventDefault();toggle()}});
 
+/* ---------- Persistence + device scan ---------- */
+const LS={get(k,d){try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const saveState=()=>{LS.set('fav',[...favs]);LS.set('hist',hist)};
+const idb=new Promise(r=>{try{const q=indexedDB.open('atmo',1);q.onupgradeneeded=()=>q.result.createObjectStore('songs',{keyPath:'id'});q.onsuccess=()=>r(q.result);q.onerror=()=>r(null)}catch(e){r(null)}});
+const dbDo=async(m,fn)=>{const d=await idb;if(!d)return;return new Promise(res=>{try{const t=d.transaction('songs',m),rq=fn(t.objectStore('songs'));t.oncomplete=()=>res(rq&&rq.result);t.onerror=()=>res()}catch(e){res()}})};
+const NATIVE=!!(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform());
+const MS=NATIVE?Capacitor.registerPlugin('MusicScanner'):null;
+const fsrc=p=>Capacitor.convertFileSrc(p);
+const mkNative=x=>({id:'n'+x.id,title:x.title,artist:x.artist,album:x.album,path:x.path,url:fsrc(x.path),cover:x.cp?fsrc(x.cp):art(x.title),cp:x.cp,native:1,x});
+let scanning=false;
+async function scanDevice(){if(!MS||scanning)return;scanning=true;try{const r=await MS.scan();const fresh=(r.tracks||[]).map(mkNative);all=all.filter(t=>!t.native).concat(fresh);
+ const old=new Map(LS.get('nat',[]).map(o=>[o.id,o]));fresh.forEach(t=>{const o=old.get(t.x.id);if(o&&o.cp){t.cp=o.cp;t.cover=fsrc(o.cp)}});
+ build();$('npt').textContent=playing?playing.title:`${all.length} songs found`;buzz([12,40,12]);await loadCovers()}catch(e){$('npt').textContent='Allow music access to detect songs'}scanning=false}
+async function loadCovers(){let n=0;for(const t of all){if(!t.native||t.cp!==undefined&&t.cp!==null||t.cpDone)continue;t.cpDone=1;try{const r=await MS.art({path:t.path});if(r&&r.path){t.cp=r.path;t.cover=fsrc(r.path);const i=list.indexOf(t);if(i>=0){const im=$('stage').children[i];if(im)im.firstChild.src=t.cover}if(playing&&playing.id==t.id){$('npimg').src=t.cover;$('bgart').style.backgroundImage=`url(${t.cover})`}}}catch(e){}if(++n%25==0)queue()}
+ queue();LS.set('nat',all.filter(t=>t.native).map(t=>({id:t.x.id,title:t.title,artist:t.artist,album:t.album,path:t.path,cp:t.cp||null})))}
+async function init(){favs=new Set(LS.get('fav',[]));hist=LS.get('hist',[]);
+ const rows=(await dbDo('readonly',x=>x.getAll()))||[];
+ rows.forEach(r=>all.push({id:r.id,key:r.key,title:r.title,artist:r.artist,album:r.album,url:URL.createObjectURL(r.blob),cover:r.coverBlob?URL.createObjectURL(r.coverBlob):art(r.title)}));
+ if(MS)LS.get('nat',[]).forEach(o=>{all.push(mkNative({id:o.id,title:o.title,artist:o.artist,album:o.album,path:o.path,cp:o.cp}))});
+ build();if(MS){$('imp').textContent='♫  Scan device music';await scanDevice()}}
+
 /* ---------- Playback ---------- */
-function playTrack(t,tog){if(!t)return;if(playing&&playing.id==t.id&&tog){toggle();return}buzz([15,25,15]);playing=t;au.src=t.url;au.play().catch(()=>{});hist=[t.id,...hist.filter(x=>x!=t.id)].slice(0,50);
+function playTrack(t,tog){if(!t)return;if(playing&&playing.id==t.id&&tog){toggle();return}buzz([15,25,15]);playing=t;au.src=t.url;au.play().catch(()=>{});hist=[t.id,...hist.filter(x=>x!=t.id)].slice(0,50);saveState();
  $('npimg').src=t.cover;$('bgart').style.backgroundImage=`url(${t.cover})`;$('bgart').classList.add('on');$('npt').textContent=t.title;$('npa').textContent=t.artist+' - '+t.album;$('lt').textContent='Lyrics are not available for this song.';favUI();queue();
  if('mediaSession'in navigator){navigator.mediaSession.metadata=new MediaMetadata({title:t.title,artist:t.artist,album:t.album,artwork:[{src:t.cover}]});navigator.mediaSession.setActionHandler('nexttrack',()=>step(1));navigator.mediaSession.setActionHandler('previoustrack',()=>step(-1))}}
 function toggle(){if(!playing){if(list[cur])playTrack(list[cur]);return}buzz(14);au.paused?au.play():au.pause()}
@@ -156,7 +185,7 @@ const fm=s=>Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');
 au.ontimeupdate=()=>{$('time').textContent=fm(au.currentTime);$('fill').style.width=(au.duration?au.currentTime/au.duration*100:0)+'%'};
 $('seek').onclick=e=>{if(!au.duration)return;const r=$('seek').getBoundingClientRect();au.currentTime=(e.clientX-r.left)/r.width*au.duration;buzz(8)};
 function favUI(){$('fav').classList.toggle('on',!!playing&&favs.has(playing.id))}
-$('fav').onclick=()=>{if(!playing)return;favs.has(playing.id)?favs.delete(playing.id):favs.add(playing.id);buzz([10,30,10]);favUI();if(tab=='pl')build()};
+$('fav').onclick=()=>{if(!playing)return;favs.has(playing.id)?favs.delete(playing.id):favs.add(playing.id);saveState();buzz([10,30,10]);favUI();if(tab=='pl')build()};
 function queue(){$('ql').innerHTML=list.map((t,i)=>`<div class="row ${playing&&playing.id==t.id?'cur':''}" data-i="${i}"><img src="${t.cover}"><div><div>${esc(t.title)}</div><small>${esc(t.artist)}</small></div></div>`).join('')||'<div style="padding:8px;color:#b9b4b0;font-size:13px">Queue is empty</div>'}
 $('ql').onclick=e=>{const r=e.target.closest('.row');if(r){cur=+r.dataset.i;playTrack(list[cur]);layout(true)}};
 
@@ -164,21 +193,19 @@ $('ql').onclick=e=>{const r=e.target.closest('.row');if(r){cur=+r.dataset.i;play
 const P={lyr:'pl',que:'pq',vl:'pv',more:'pm'};
 for(const k in P)$(k).onclick=()=>{buzz(12);const p=$(P[k]),o=p.classList.contains('show');document.querySelectorAll('.panel').forEach(x=>x.classList.remove('show'));if(!o)p.classList.add('show')};
 $('vr').oninput=e=>au.volume=e.target.value;au.volume=.8;
-$('m1').onclick=()=>$('f1').click();$('m2').onclick=()=>$('f2').click();$('m3').onclick=$('dot').onclick=()=>toggleAR();
+$('m6').onclick=()=>scanDevice();$('m1').onclick=()=>$('f1').click();$('m2').onclick=()=>$('f2').click();$('m3').onclick=$('dot').onclick=()=>toggleAR();
 $('m4').onclick=async()=>{try{await document.documentElement.requestFullscreen();await screen.orientation.lock('landscape')}catch(e){}};
-$('m5').onclick=()=>{au.pause();au.removeAttribute('src');all=[];playing=null;hist=[];favs.clear();$('npt').textContent='Not playing';$('npa').textContent='—';$('npimg').removeAttribute('src');build();buzz(30)};
+$('m5').onclick=()=>{dbDo('readwrite',x=>x.clear());LS.set('nat',[]);au.pause();au.removeAttribute('src');all=[];playing=null;hist=[];favs.clear();$('npt').textContent='Not playing';$('npa').textContent='—';$('npimg').removeAttribute('src');build();buzz(30)};
 
 /* ---------- AR passthrough + spatial parallax ---------- */
 let ar=false,stream;async function toggleAR(force){buzz(20);ar=force!==undefined?force:!ar;
  if(ar){try{stream=stream||await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});$('cam').srcObject=stream;$('cam').classList.add('on')}catch(e){ar=false;$('cam').classList.remove('on')}}
  else $('cam').classList.remove('on');$('dot').style.background=ar?'#7CFFB2':'rgba(255,255,255,.6)'}
-addEventListener('deviceorientation',e=>{if(!ar||e.gamma==null)return;const x=Math.max(-30,Math.min(30,e.gamma))*-1.2,y=Math.max(-30,Math.min(30,(e.beta||0)-60))*-.8;$('world').style.transform=`translate(${x}px,${y}px)`});
-addEventListener('pointermove',e=>{if(ar||sx!=null)return;$('world').style.transform=`translate(${(e.clientX/innerWidth-.5)*-10}px,${(e.clientY/innerHeight-.5)*-8}px)`});
 /* landscape + AR default */
 try{screen.orientation.lock('landscape').catch(()=>{})}catch(e){}
 addEventListener('click',()=>{if(!stream&&!window.__arTried){window.__arTried=1}},{once:true});
 const goFS=()=>{if(window.Capacitor?.isNativePlatform?.())return;const e=document.documentElement;if(!document.fullscreenElement&&e.requestFullscreen)e.requestFullscreen({navigationUI:'hide'}).then(()=>screen.orientation.lock('landscape')).catch(()=>{})};
 addEventListener('pointerdown',goFS,{once:true});
-toggleAR(true);build();
+toggleAR(true);build();init();
 if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script></body></html>

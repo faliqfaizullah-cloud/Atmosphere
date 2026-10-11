@@ -10,6 +10,7 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
   @Override
   public void onCreate(Bundle b) {
+    registerPlugin(MusicScannerPlugin.class);
     super.onCreate(b);
     WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
