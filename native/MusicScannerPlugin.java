@@ -1,6 +1,7 @@
 package com.atmosphere.music;
 
 import android.Manifest;
+import android.content.Intent;
 import android.database.Cursor;
 import android.media.MediaMetadataRetriever;
 import android.os.Build;
@@ -96,5 +97,20 @@ public class MusicScannerPlugin extends Plugin {
       } catch (Exception e) { }
       call.resolve(r);
     }).start();
+  }
+
+  @PluginMethod
+  public void output(PluginCall call) {
+    String[] acts = { "android.settings.panel.action.VOLUME", "android.settings.CAST_SETTINGS", "android.settings.BLUETOOTH_SETTINGS" };
+    for (String a : acts) {
+      try {
+        Intent i = new Intent(a);
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        getContext().startActivity(i);
+        call.resolve();
+        return;
+      } catch (Exception e) { }
+    }
+    call.reject("No output settings available");
   }
 }
