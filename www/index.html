@@ -5,7 +5,7 @@
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
 html,body{margin:0;width:100vw;height:100vh;padding:0;overscroll-behavior:none;height:100%;overflow:hidden;background:#1b1a19;font-family:-apple-system,"SF Pro Display",Inter,system-ui,sans-serif;color:#fff}
-:root{--s:min(30vh,280px);--glass:rgba(60,58,57,.55);--stroke:rgba(255,255,255,.14)}
+:root{--s:min(37vh,330px);--glass:rgba(60,58,57,.55);--stroke:rgba(255,255,255,.14)}
 #room{position:fixed;inset:0;background:radial-gradient(120% 90% at 50% 30%,#6b625b 0%,#3b3633 45%,#1c1a19 100%)}
 #cam{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .8s}
 #cam.on{opacity:1}
@@ -58,6 +58,10 @@ svg{width:1.2em;height:1.2em;fill:currentColor;flex:none}
 #stage{width:100%;height:var(--s)}#bar{width:min(92%,700px)}#dots{width:min(46%,320px)}
 #empty{position:absolute!important;inset:0;transform:none!important;height:auto!important;pointer-events:none;padding-top:8vh}
 #empty .big{pointer-events:auto}
+.panel{z-index:30;max-height:72%}
+.panel h4{display:flex;justify-content:space-between;align-items:center;margin:0 0 8px 6px;position:sticky;top:-12px;padding:2px 0}
+.x{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.18);display:grid;place-items:center;cursor:pointer;font-size:15px;font-weight:400;transition:transform .35s cubic-bezier(.34,1.9,.64,1),background .2s}
+.x:active{transform:scale(.75);background:rgba(255,255,255,.3)}
 </style></head>
 <body>
 <div id="room"></div><video id="cam" playsinline muted autoplay></video><div id="bgart"></div><div id="shade"></div>
@@ -72,10 +76,10 @@ svg{width:1.2em;height:1.2em;fill:currentColor;flex:none}
   <div class="ic" id="lyr"></div><div class="ic" id="que"></div><div class="ic" id="vl"></div>
  </div>
  <div id="dots"><div id="dot" title="Toggle AR"></div><div id="seek"><i id="fill"></i></div></div>
- <div class="panel glass" id="pq"><h4>Up Next</h4><div id="ql"></div></div>
- <div class="panel glass" id="pl"><h4>Lyrics</h4><div id="lt" style="font-size:14px;line-height:1.6;color:#d8d4d0"></div></div>
- <div class="panel glass" id="pv"><h4>Volume</h4><input id="vr" type="range" min="0" max="1" step=".01" value=".8" style="width:100%"></div>
- <div class="panel glass" id="pm"><h4>Options</h4>
+ <div class="panel glass" id="pq"><h4><span>Up Next</span><b class="x" aria-label="Close">✕</b></h4><div id="ql"></div></div>
+ <div class="panel glass" id="pl"><h4><span>Lyrics</span><b class="x" aria-label="Close">✕</b></h4><div id="lt" style="font-size:14px;line-height:1.6;color:#d8d4d0"></div></div>
+ <div class="panel glass" id="pv"><h4><span>Volume</span><b class="x" aria-label="Close">✕</b></h4><input id="vr" type="range" min="0" max="1" step=".01" value=".8" style="width:100%"></div>
+ <div class="panel glass" id="pm"><h4><span>Options</span><b class="x" aria-label="Close">✕</b></h4>
   <div class="row" id="m6">⟳ Rescan device music</div><div class="row" id="m1">＋ Import songs</div><div class="row" id="m2">▤ Import folder</div><div class="row" id="m3">◎ Toggle AR passthrough</div><div class="row" id="m4">⤢ Fullscreen</div><div class="row" id="m5">✕ Clear library</div></div>
 </div>
 <div id="drop">Drop songs to import</div>
@@ -194,8 +198,12 @@ $('ql').onclick=e=>{const r=e.target.closest('.row');if(r){cur=+r.dataset.i;play
 /* ---------- Panels / menu ---------- */
 const P={lyr:'pl',que:'pq',vl:'pv',more:'pm'};
 for(const k in P)$(k).onclick=()=>{buzz(12);const p=$(P[k]),o=p.classList.contains('show');document.querySelectorAll('.panel').forEach(x=>x.classList.remove('show'));if(!o)p.classList.add('show')};
+const closeAll=()=>document.querySelectorAll('.panel.show').forEach(x=>x.classList.remove('show'));
+document.addEventListener('click',e=>{const x=e.target.closest('.x');if(x){buzz(12);x.closest('.panel').classList.remove('show');e.stopPropagation()}},true);
+document.addEventListener('pointerdown',e=>{if(!e.target.closest('.panel')&&!e.target.closest('.ic'))closeAll()});
+addEventListener('keydown',e=>{if(e.key=='Escape')closeAll()});
 $('vr').oninput=e=>au.volume=e.target.value;au.volume=.8;
-$('m6').onclick=()=>scanDevice();$('m1').onclick=()=>$('f1').click();$('m2').onclick=()=>$('f2').click();$('m3').onclick=$('dot').onclick=()=>toggleAR();
+$('m6').onclick=()=>{closeAll();scanDevice()};$('m1').onclick=()=>$('f1').click();$('m2').onclick=()=>$('f2').click();$('m3').onclick=$('dot').onclick=()=>toggleAR();
 $('m4').onclick=async()=>{try{await document.documentElement.requestFullscreen();await screen.orientation.lock('landscape')}catch(e){}};
 $('m5').onclick=()=>{dbDo('readwrite',x=>x.clear());LS.set('nat',[]);au.pause();au.removeAttribute('src');all=[];playing=null;hist=[];favs.clear();$('npt').textContent='Not playing';$('npa').textContent='—';$('npimg').removeAttribute('src');build();buzz(30)};
 
