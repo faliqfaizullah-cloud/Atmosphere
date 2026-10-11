@@ -84,6 +84,7 @@ svg{width:1.2em;height:1.2em;fill:currentColor;flex:none}
 <input type="file" id="f2" webkitdirectory multiple hidden>
 <audio id="au" preload="metadata"></audio>
 <script>
+window.onerror=(m,u,l)=>{try{document.getElementById('npt').textContent='Error: '+m+' @'+l}catch(e){}};
 const $=id=>document.getElementById(id),au=$('au');
 const I={listen:'<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm-2 14V8l7 4z"/></svg>',browse:'<svg viewBox="0 0 24 24"><path d="M12 2 3 7v10l9 5 9-5V7zm0 2.3 6.5 3.6L12 11.500 5.500 7.900zM5 9.600l6 3.300v6.600l-6-3.300zm8 9.900v-6.600l6-3.300v6.600z"/></svg>',radio:'<svg viewBox="0 0 24 24"><path d="M3 10h2v4H3zm4-4h2v12H7zm4-4h2v20h-2zm4 4h2v12h-2zm4 4h2v4h-2z"/></svg>',pl:'<svg viewBox="0 0 24 24"><path d="M9 3v12.600A4 4 0 107 19V7h10v6.600A4 4 0 1019 17V3z"/></svg>',
 prev:'<svg viewBox="0 0 24 24"><path d="M11 6v12L2 12zm11 0v12l-9-6z"/></svg>',next:'<svg viewBox="0 0 24 24"><path d="M13 6v12l9-6zM2 6v12l9-6z"/></svg>',play:'<svg viewBox="0 0 24 24"><path d="M7 4h4v16H7zm6 0h4v16h-4z"/></svg>',pau:'<svg viewBox="0 0 24 24"><path d="M7 4v16l13-8z"/></svg>',
@@ -157,9 +158,10 @@ const LS={get(k,d){try{const v=JSON.parse(localStorage.getItem(k));return v==nul
 const saveState=()=>{LS.set('fav',[...favs]);LS.set('hist',hist)};
 const idb=new Promise(r=>{try{const q=indexedDB.open('atmo',1);q.onupgradeneeded=()=>q.result.createObjectStore('songs',{keyPath:'id'});q.onsuccess=()=>r(q.result);q.onerror=()=>r(null)}catch(e){r(null)}});
 const dbDo=async(m,fn)=>{const d=await idb;if(!d)return;return new Promise(res=>{try{const t=d.transaction('songs',m),rq=fn(t.objectStore('songs'));t.oncomplete=()=>res(rq&&rq.result);t.onerror=()=>res()}catch(e){res()}})};
-const NATIVE=!!(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform());
-const MS=NATIVE?Capacitor.registerPlugin('MusicScanner'):null;
-const fsrc=p=>Capacitor.convertFileSrc(p);
+const C=window.Capacitor||{};let NATIVE=false,MS=null;
+try{NATIVE=C.isNativePlatform?!!C.isNativePlatform():(C.getPlatform?C.getPlatform()!=='web':false);
+ if(NATIVE)MS=(C.Plugins&&C.Plugins.MusicScanner)||(C.registerPlugin?C.registerPlugin('MusicScanner'):null)}catch(e){}
+const fsrc=p=>C.convertFileSrc?C.convertFileSrc(p):'http://localhost/_capacitor_file_'+p;
 const mkNative=x=>({id:'n'+x.id,title:x.title,artist:x.artist,album:x.album,path:x.path,url:fsrc(x.path),cover:x.cp?fsrc(x.cp):art(x.title),cp:x.cp,native:1,x});
 let scanning=false;
 async function scanDevice(){if(!MS||scanning)return;scanning=true;try{const r=await MS.scan();const fresh=(r.tracks||[]).map(mkNative);all=all.filter(t=>!t.native).concat(fresh);
@@ -180,7 +182,7 @@ function playTrack(t,tog){if(!t)return;if(playing&&playing.id==t.id&&tog){toggle
 function toggle(){if(!playing){if(list[cur])playTrack(list[cur]);return}buzz(14);au.paused?au.play():au.pause()}
 function step(d){if(!list.length)return;buzz([10,20,10]);let i=playing?list.findIndex(t=>t.id==playing.id):cur-d;if(i<0)i=cur-d;i=(i+d+list.length)%list.length;playTrack(list[i]);cur=i;layout(true)}
 $('prev').onclick=()=>{if(au.currentTime>3){au.currentTime=0;buzz(10)}else step(-1)};$('next').onclick=()=>step(1);$('play').onclick=toggle;
-au.onplay=au.onpause=()=>$('play').innerHTML=au.paused?I.pau:I.play;au.onended=()=>step(1);
+au.onplay=au.onpause=()=>$('play').innerHTML=au.paused?I.pau:I.play;au.onended=()=>step(1);au.onerror=()=>{$('npt').textContent='Cannot play this file';$('npa').textContent=playing?playing.title:''};
 const fm=s=>Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');
 au.ontimeupdate=()=>{$('time').textContent=fm(au.currentTime);$('fill').style.width=(au.duration?au.currentTime/au.duration*100:0)+'%'};
 $('seek').onclick=e=>{if(!au.duration)return;const r=$('seek').getBoundingClientRect();au.currentTime=(e.clientX-r.left)/r.width*au.duration;buzz(8)};
@@ -206,6 +208,6 @@ try{screen.orientation.lock('landscape').catch(()=>{})}catch(e){}
 addEventListener('click',()=>{if(!stream&&!window.__arTried){window.__arTried=1}},{once:true});
 const goFS=()=>{if(window.Capacitor?.isNativePlatform?.())return;const e=document.documentElement;if(!document.fullscreenElement&&e.requestFullscreen)e.requestFullscreen({navigationUI:'hide'}).then(()=>screen.orientation.lock('landscape')).catch(()=>{})};
 addEventListener('pointerdown',goFS,{once:true});
-toggleAR(true);build();init();
+toggleAR(true);build();init().catch(e=>{$('npt').textContent='Error: '+(e&&e.message||e)});
 if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script></body></html>
