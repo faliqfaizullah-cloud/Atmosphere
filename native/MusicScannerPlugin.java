@@ -44,8 +44,10 @@ public class MusicScannerPlugin extends Plugin {
     new Thread(() -> {
       try {
         JSArray arr = new JSArray();
-        String[] proj = { MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST,
-            MediaStore.Audio.Media.ALBUM, MediaStore.Audio.Media.DATA };
+        boolean g = Build.VERSION.SDK_INT >= 30;
+        String[] proj = g
+            ? new String[] { MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.ALBUM, MediaStore.Audio.Media.DATA, MediaStore.Audio.Media.GENRE }
+            : new String[] { MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.ALBUM, MediaStore.Audio.Media.DATA };
         String sel = MediaStore.Audio.Media.IS_MUSIC + "!=0 AND " + MediaStore.Audio.Media.DURATION + ">30000";
         Cursor c = getContext().getContentResolver().query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, proj, sel, null,
             MediaStore.Audio.Media.TITLE + " COLLATE NOCASE ASC");
@@ -60,6 +62,7 @@ public class MusicScannerPlugin extends Plugin {
             o.put("artist", (ar == null || ar.equals("<unknown>")) ? "Unknown Artist" : ar);
             o.put("album", (al == null || al.equals("<unknown>")) ? "Single" : al);
             o.put("path", path);
+            if (g && c.getString(5) != null) o.put("genre", c.getString(5));
             arr.put(o);
           }
           c.close();
