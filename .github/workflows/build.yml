@@ -1,0 +1,41 @@
+name: Build Atmosphere APK
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - run: npm install
+      - run: npx cap add android
+      - name: Patch manifest (landscape + permissions)
+        run: |
+          M=android/app/src/main/AndroidManifest.xml
+          sed -i '0,/<activity/s//<activity android:screenOrientation="sensorLandscape"/' $M
+          sed -i 's#<application#<uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>\n    <application#' $M
+          sed -i 's#</application>#    <service android:name="com.atmosphere.music.MediaService" android:exported="false" android:foregroundServiceType="mediaPlayback"/>\n    </application>#' $M
+          sed -i 's#<application#<uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.VIBRATE"/>\n    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>\n    <application#' $M
+      - name: Fullscreen immersive + cutout
+        run: |
+          cp native/MainActivity.java native/MusicScannerPlugin.java native/MediaControlPlugin.java native/MediaService.java android/app/src/main/java/com/atmosphere/music/
+          S=android/app/src/main/res/values/styles.xml
+          sed -i 's#</style>#    <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>\n    </style>#' $S
+      - name: App icon
+        run: cp -r native/res/* android/app/src/main/res/
+      - run: npx cap sync android
+      - run: cd android && chmod +x gradlew && ./gradlew assembleDebug
+      - run: cp android/app/build/outputs/apk/debug/app-debug.apk Atmosphere.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: Atmosphere-APK, path: Atmosphere.apk }
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with: { files: Atmosphere.apk }
